@@ -1,0 +1,962 @@
+<!--
+  Áskesis — Mockup interativo (contrato visual)
+  ───────────────────────────────────────────────
+  ATENÇÃO IMPLEMENTAÇÃO (deltas em relação a este mockup):
+    1. Botão "X" no Focus DEVE abrir AlertDialog de confirmação
+       antes de cancelar a sessão (invariante #3 do claude.md).
+    2. O year heatmap real deve ter ~365 células (≈52 colunas × 7 linhas),
+       estilo GitHub, com scroll horizontal no mobile. O grid abaixo é
+       apenas amostra representativa.
+    3. As 4 tags exibidas (Estudo/Research/Saúde/Revisão) são o seed do
+       primeiro launch; o usuário pode criar/editar/excluir tags na tela
+       de gerenciamento (acessível pelo ícone de ampulheta no topbar).
+    4. Quando uma tag for excluída, FocusSessions órfãs devem renderizar
+       como "Sem tag" (cor neutra #555).
+    5. Ícones usam família Tabler (`ti ti-*`) → pacote `tabler_icons` no
+       Flutter.
+-->
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500&display=swap');
+
+  .ask-wrap {
+    display: flex;
+    justify-content: center;
+    padding: 1.5rem 0;
+  }
+
+  .phone {
+    width: 320px;
+    background: #0d0d0d;
+    border-radius: 40px;
+    border: 2px solid #2a2a2a;
+    overflow: hidden;
+    box-shadow: 0 0 0 1px #111;
+    font-family: 'DM Sans', sans-serif;
+    color: #e8e4dc;
+    position: relative;
+    min-height: 620px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .statusbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 20px 4px;
+    font-size: 10px;
+    color: #666;
+    letter-spacing: 0.04em;
+  }
+
+  .topbar {
+    padding: 6px 20px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .app-title {
+    font-family: 'DM Serif Display', serif;
+    font-size: 22px;
+    color: #e8e4dc;
+    letter-spacing: 0.02em;
+  }
+
+  .hourglass-icon {
+    font-size: 18px;
+    color: #c9a84c;
+  }
+
+  .screen {
+    flex: 1;
+    padding: 0 18px;
+    overflow: hidden;
+    display: none;
+  }
+
+  .screen.active {
+    display: block;
+  }
+
+  .section-label {
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: #555;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .view-toggle {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 14px;
+    background: #1a1a1a;
+    border-radius: 8px;
+    padding: 3px;
+  }
+
+  .vt-btn {
+    flex: 1;
+    padding: 5px;
+    border: none;
+    background: transparent;
+    color: #555;
+    font-size: 11px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: 'DM Sans', sans-serif;
+    transition: all 0.15s;
+  }
+
+  .vt-btn.on {
+    background: #1f1f1f;
+    color: #c9a84c;
+    border: 0.5px solid #2f2a1a;
+  }
+
+  .task-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 0;
+    border-bottom: 0.5px solid #1e1e1e;
+  }
+
+  .task-check {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 1.5px solid #3a3a3a;
+    flex-shrink: 0;
+  }
+
+  .task-check.done {
+    background: #c9a84c;
+    border-color: #c9a84c;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9px;
+    color: #0d0d0d;
+  }
+
+  .task-text {
+    flex: 1;
+    font-size: 13px;
+    color: #d4d0c8;
+  }
+
+  .task-text.done-text {
+    color: #444;
+    text-decoration: line-through;
+  }
+
+  .task-tag {
+    font-size: 9px;
+    padding: 2px 7px;
+    border-radius: 10px;
+    letter-spacing: 0.05em;
+    font-weight: 500;
+  }
+
+  .tag-study { background: #1a2633; color: #4a90d9; }
+  .tag-health { background: #1a2a1e; color: #4caf72; }
+  .tag-research { background: #2a1e33; color: #9b6fc7; }
+  .tag-review { background: #33261a; color: #c97a3a; }
+  .tag-none { background: #1a1a1a; color: #555; }
+
+  .priority-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .p-high { background: #c94c4c; }
+  .p-med { background: #c9a84c; }
+  .p-low { background: #4a7c4c; }
+
+  .focus-tag-row {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+  }
+
+  .ftag {
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 11px;
+    border: 1px solid #2a2a2a;
+    background: #141414;
+    color: #666;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: 'DM Sans', sans-serif;
+  }
+
+  .ftag.sel {
+    border-color: #c9a84c;
+    color: #c9a84c;
+    background: #1f1a0a;
+  }
+
+  .timer-display {
+    text-align: center;
+    margin: 12px 0 18px;
+  }
+
+  .timer-num {
+    font-family: 'DM Serif Display', serif;
+    font-size: 56px;
+    color: #e8e4dc;
+    letter-spacing: -1px;
+    line-height: 1;
+  }
+
+  .timer-sub {
+    font-size: 10px;
+    color: #444;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-top: 4px;
+  }
+
+  .timer-ring {
+    width: 120px;
+    height: 120px;
+    margin: 0 auto 14px;
+    position: relative;
+  }
+
+  .timer-btns {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+  }
+
+  .tbtn {
+    padding: 10px 22px;
+    border-radius: 24px;
+    border: none;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 12px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.15s;
+  }
+
+  .tbtn-primary {
+    background: #c9a84c;
+    color: #0d0d0d;
+  }
+
+  .tbtn-ghost {
+    background: #1a1a1a;
+    color: #555;
+    border: 0.5px solid #2a2a2a;
+  }
+
+  .mode-row {
+    display: flex;
+    gap: 4px;
+    background: #1a1a1a;
+    border-radius: 8px;
+    padding: 3px;
+    margin-bottom: 14px;
+  }
+
+  .mode-btn {
+    flex: 1;
+    padding: 6px;
+    border: none;
+    font-size: 11px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: 'DM Sans', sans-serif;
+    transition: all 0.15s;
+    background: transparent;
+    color: #555;
+  }
+
+  .mode-btn.on {
+    background: #1f1f1f;
+    color: #c9a84c;
+    border: 0.5px solid #2f2a1a;
+  }
+
+  .review-item {
+    display: flex;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 0.5px solid #1e1e1e;
+    align-items: flex-start;
+  }
+
+  .ri-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 14px;
+  }
+
+  .ri-info { flex: 1; }
+
+  .ri-title {
+    font-size: 12px;
+    color: #d4d0c8;
+    margin-bottom: 2px;
+    font-weight: 500;
+  }
+
+  .ri-meta {
+    font-size: 10px;
+    color: #555;
+  }
+
+  .ri-dur {
+    font-size: 11px;
+    color: #c9a84c;
+    font-weight: 500;
+    align-self: center;
+  }
+
+  .dash-sub {
+    display: flex;
+    gap: 4px;
+    background: #1a1a1a;
+    border-radius: 8px;
+    padding: 3px;
+    margin-bottom: 14px;
+  }
+
+  .ds-btn {
+    flex: 1;
+    padding: 5px;
+    border: none;
+    font-size: 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: 'DM Sans', sans-serif;
+    background: transparent;
+    color: #555;
+    transition: all 0.15s;
+  }
+
+  .ds-btn.on {
+    background: #1f1f1f;
+    color: #c9a84c;
+    border: 0.5px solid #2f2a1a;
+  }
+
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+
+  .stat-card {
+    background: #161616;
+    border: 0.5px solid #222;
+    border-radius: 12px;
+    padding: 12px;
+  }
+
+  .stat-val {
+    font-family: 'DM Serif Display', serif;
+    font-size: 26px;
+    color: #e8e4dc;
+    line-height: 1;
+  }
+
+  .stat-lbl {
+    font-size: 10px;
+    color: #444;
+    margin-top: 4px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .stat-accent {
+    color: #c9a84c;
+  }
+
+  /* Year heatmap — amostra. No app real: ~52 colunas × 7 linhas com scroll horizontal. */
+  .heatmap-row {
+    display: flex;
+    gap: 3px;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
+  }
+
+  .hm-cell {
+    width: 18px;
+    height: 18px;
+    border-radius: 3px;
+    background: #1a1a1a;
+  }
+
+  .hm-1 { background: #2f2410; }
+  .hm-2 { background: #5c4615; }
+  .hm-3 { background: #8a6820; }
+  .hm-4 { background: #c9a84c; }
+
+  .bar-chart {
+    display: flex;
+    align-items: flex-end;
+    gap: 6px;
+    height: 70px;
+    margin-bottom: 6px;
+  }
+
+  .bar-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    height: 100%;
+    justify-content: flex-end;
+  }
+
+  .bar {
+    width: 100%;
+    border-radius: 3px 3px 0 0;
+    background: #2a2a2a;
+    transition: height 0.3s;
+  }
+
+  .bar.active { background: #c9a84c; }
+
+  .bar-lbl {
+    font-size: 9px;
+    color: #444;
+  }
+
+  .navbar {
+    display: flex;
+    background: #111;
+    border-top: 0.5px solid #1e1e1e;
+    padding: 8px 0 12px;
+  }
+
+  .nav-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    cursor: pointer;
+    padding: 4px 0;
+    transition: all 0.15s;
+  }
+
+  .nav-item i {
+    font-size: 20px;
+    color: #3a3a3a;
+    transition: color 0.15s;
+  }
+
+  .nav-item .nav-lbl {
+    font-size: 9px;
+    color: #3a3a3a;
+    letter-spacing: 0.05em;
+    transition: color 0.15s;
+  }
+
+  .nav-item.active i, .nav-item.active .nav-lbl {
+    color: #c9a84c;
+  }
+
+  .mini-calendar {
+    background: #161616;
+    border: 0.5px solid #1e1e1e;
+    border-radius: 12px;
+    padding: 10px;
+    margin-bottom: 12px;
+  }
+
+  .cal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    font-size: 11px;
+    color: #888;
+  }
+
+  .cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+    text-align: center;
+  }
+
+  .cal-cell {
+    font-size: 10px;
+    padding: 4px 2px;
+    border-radius: 4px;
+    color: #555;
+  }
+
+  .cal-cell.has-task {
+    color: #d4d0c8;
+  }
+
+  .cal-cell.today {
+    background: #c9a84c;
+    color: #0d0d0d;
+    font-weight: 500;
+    border-radius: 50%;
+  }
+
+  .cal-cell.hdr {
+    color: #333;
+    font-size: 9px;
+    letter-spacing: 0.05em;
+  }
+
+  /* Modal de confirmação (cancelamento de Focus) */
+  .modal-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+    border-radius: 38px;
+  }
+  .modal-overlay.on { display: flex; }
+  .modal-box {
+    background: #161616;
+    border: 0.5px solid #2a2a2a;
+    border-radius: 16px;
+    padding: 18px;
+    width: 80%;
+    text-align: center;
+  }
+  .modal-title {
+    font-family: 'DM Serif Display', serif;
+    color: #e8e4dc;
+    font-size: 16px;
+    margin-bottom: 6px;
+  }
+  .modal-msg {
+    color: #888;
+    font-size: 11px;
+    margin-bottom: 14px;
+    line-height: 1.4;
+  }
+  .modal-btns {
+    display: flex;
+    gap: 8px;
+  }
+  .modal-btns .tbtn { flex: 1; padding: 8px; font-size: 11px; }
+  .tbtn-danger { background: #c94c4c; color: #0d0d0d; }
+</style>
+
+<h2 class="sr-only">Mockup interativo do aplicativo Áskesis — mostra as 4 abas: To-do, Focus, Review e Dashboard</h2>
+
+<div class="ask-wrap">
+  <div class="phone">
+    <div class="statusbar">
+      <span>09:41</span>
+      <span>⏳ Áskesis</span>
+      <span>100%</span>
+    </div>
+
+    <div class="topbar">
+      <div class="app-title">Áskesis</div>
+      <i class="ti ti-hourglass hourglass-icon" aria-hidden="true" title="Gerenciar tags"></i>
+    </div>
+
+    <!-- TO-DO TAB -->
+    <div class="screen active" id="s-todo">
+      <div class="view-toggle">
+        <button class="vt-btn on" onclick="switchView(this,'v-list')"><i class="ti ti-list" aria-hidden="true"></i> Lista</button>
+        <button class="vt-btn" onclick="switchView(this,'v-kanban')"><i class="ti ti-layout-columns" aria-hidden="true"></i> Kanban</button>
+        <button class="vt-btn" onclick="switchView(this,'v-cal')"><i class="ti ti-calendar" aria-hidden="true"></i> Calendário</button>
+      </div>
+
+      <div id="v-list">
+        <div class="section-label">Hoje · Maio 13</div>
+        <div class="task-item">
+          <div class="priority-dot p-high"></div>
+          <div class="task-check"></div>
+          <div class="task-text">Revisar artigo CONSORT 2025</div>
+          <span class="task-tag tag-research">Research</span>
+        </div>
+        <div class="task-item">
+          <div class="priority-dot p-high"></div>
+          <div class="task-check done">✓</div>
+          <div class="task-text done-text">Sessão de Anki – Fisiologia</div>
+          <span class="task-tag tag-study">Estudo</span>
+        </div>
+        <div class="task-item">
+          <div class="priority-dot p-med"></div>
+          <div class="task-check"></div>
+          <div class="task-text">Ler cap. 12 Guyton</div>
+          <span class="task-tag tag-study">Estudo</span>
+        </div>
+        <div class="task-item">
+          <div class="priority-dot p-low"></div>
+          <div class="task-check"></div>
+          <div class="task-text">Academia – treino de força</div>
+          <span class="task-tag tag-health">Saúde</span>
+        </div>
+        <div class="task-item">
+          <div class="priority-dot p-low"></div>
+          <div class="task-check done">✓</div>
+          <div class="task-text done-text">Plano estatístico RCT</div>
+          <span class="task-tag tag-research">Research</span>
+        </div>
+      </div>
+
+      <div id="v-kanban" style="display:none;">
+        <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;">
+          <div>
+            <div class="section-label" style="text-align:center;">To-do</div>
+            <div style="background:#161616;border-radius:8px;padding:7px;font-size:11px;color:#888;margin-bottom:5px;border-left:2px solid #3a3a3a;">Revisar CONSORT</div>
+            <div style="background:#161616;border-radius:8px;padding:7px;font-size:11px;color:#888;border-left:2px solid #3a3a3a;">Ler Guyton</div>
+          </div>
+          <div>
+            <div class="section-label" style="text-align:center;">Em curso</div>
+            <div style="background:#161616;border-radius:8px;padding:7px;font-size:11px;color:#c9a84c;border-left:2px solid #c9a84c;">Artigo IC</div>
+          </div>
+          <div>
+            <div class="section-label" style="text-align:center;">Feito</div>
+            <div style="background:#161616;border-radius:8px;padding:7px;font-size:11px;color:#4a7c4c;margin-bottom:5px;border-left:2px solid #4a7c4c;">Anki sessão</div>
+            <div style="background:#161616;border-radius:8px;padding:7px;font-size:11px;color:#4a7c4c;border-left:2px solid #4a7c4c;">Plano estat.</div>
+          </div>
+        </div>
+      </div>
+
+      <div id="v-cal" style="display:none;">
+        <div class="mini-calendar">
+          <div class="cal-header">
+            <i class="ti ti-chevron-left" aria-hidden="true"></i>
+            <span>Maio 2026</span>
+            <i class="ti ti-chevron-right" aria-hidden="true"></i>
+          </div>
+          <div class="cal-grid">
+            <div class="cal-cell hdr">D</div><div class="cal-cell hdr">S</div><div class="cal-cell hdr">T</div><div class="cal-cell hdr">Q</div><div class="cal-cell hdr">Q</div><div class="cal-cell hdr">S</div><div class="cal-cell hdr">S</div>
+            <div class="cal-cell"></div><div class="cal-cell"></div><div class="cal-cell"></div><div class="cal-cell"></div><div class="cal-cell has-task">1</div><div class="cal-cell has-task">2</div><div class="cal-cell">3</div>
+            <div class="cal-cell">4</div><div class="cal-cell has-task">5</div><div class="cal-cell">6</div><div class="cal-cell has-task">7</div><div class="cal-cell">8</div><div class="cal-cell has-task">9</div><div class="cal-cell">10</div>
+            <div class="cal-cell">11</div><div class="cal-cell">12</div><div class="cal-cell today">13</div><div class="cal-cell has-task">14</div><div class="cal-cell">15</div><div class="cal-cell has-task">16</div><div class="cal-cell">17</div>
+            <div class="cal-cell">18</div><div class="cal-cell">19</div><div class="cal-cell">20</div><div class="cal-cell">21</div><div class="cal-cell">22</div><div class="cal-cell">23</div><div class="cal-cell">24</div>
+          </div>
+        </div>
+        <div class="section-label">Tarefas · 13 mai</div>
+        <div class="task-item">
+          <div class="priority-dot p-high"></div>
+          <div class="task-check"></div>
+          <div class="task-text">Revisar artigo CONSORT</div>
+          <span class="task-tag tag-research">Research</span>
+        </div>
+        <div class="task-item">
+          <div class="priority-dot p-med"></div>
+          <div class="task-check"></div>
+          <div class="task-text">Ler cap. 12 Guyton</div>
+          <span class="task-tag tag-study">Estudo</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- FOCUS TAB -->
+    <div class="screen" id="s-focus">
+      <div class="mode-row">
+        <button class="mode-btn on" onclick="switchMode(this,'m-timer')"><i class="ti ti-clock-down" aria-hidden="true"></i> Temporizador</button>
+        <button class="mode-btn" onclick="switchMode(this,'m-stopwatch')"><i class="ti ti-clock-up" aria-hidden="true"></i> Cronômetro</button>
+      </div>
+
+      <div id="m-timer">
+        <div class="section-label">Nicho / Tag</div>
+        <div class="focus-tag-row">
+          <button class="ftag sel" onclick="selTag(this)">Estudo</button>
+          <button class="ftag" onclick="selTag(this)">Research</button>
+          <button class="ftag" onclick="selTag(this)">Saúde</button>
+          <button class="ftag" onclick="selTag(this)">Revisão</button>
+          <button class="ftag" onclick="selTag(this)">+ Tag</button>
+        </div>
+        <div class="timer-display">
+          <svg width="120" height="120" viewBox="0 0 120 120" class="timer-ring" style="display:block;margin:0 auto 10px">
+            <circle cx="60" cy="60" r="52" fill="none" stroke="#1a1a1a" stroke-width="5"/>
+            <circle cx="60" cy="60" r="52" fill="none" stroke="#c9a84c" stroke-width="5" stroke-linecap="round"
+              stroke-dasharray="326" stroke-dashoffset="81" transform="rotate(-90 60 60)" opacity="0.85"/>
+            <text x="60" y="58" text-anchor="middle" font-family="DM Serif Display,serif" font-size="26" fill="#e8e4dc">25:00</text>
+            <text x="60" y="74" text-anchor="middle" font-size="9" fill="#555" font-family="DM Sans,sans-serif" letter-spacing="2">POMODORO</text>
+          </svg>
+        </div>
+        <div class="timer-btns">
+          <!-- Cancel: abre modal de confirmação (.modal-overlay). NUNCA cancela diretamente. -->
+          <button class="tbtn tbtn-ghost" onclick="document.getElementById('cancel-modal').classList.add('on')" aria-label="Cancelar sessão">
+            <i class="ti ti-x" aria-hidden="true"></i>
+          </button>
+          <button class="tbtn tbtn-primary"><i class="ti ti-player-play" aria-hidden="true"></i> Iniciar</button>
+        </div>
+        <div style="text-align:center;margin-top:10px;">
+          <div class="section-label">Duração</div>
+          <div style="display:flex;gap:6px;justify-content:center;">
+            <button class="ftag">15 min</button>
+            <button class="ftag sel">25 min</button>
+            <button class="ftag">50 min</button>
+            <button class="ftag">90 min</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="m-stopwatch" style="display:none;">
+        <div class="section-label">Nicho / Tag</div>
+        <div class="focus-tag-row">
+          <button class="ftag sel">Research</button>
+          <button class="ftag" onclick="selTag(this)">Estudo</button>
+          <button class="ftag" onclick="selTag(this)">Saúde</button>
+        </div>
+        <div style="text-align:center;margin:16px 0;">
+          <div class="timer-num">00:00:00</div>
+          <div class="timer-sub">Cronômetro</div>
+        </div>
+        <div class="timer-btns">
+          <button class="tbtn tbtn-ghost"><i class="ti ti-player-pause" aria-hidden="true"></i></button>
+          <button class="tbtn tbtn-primary"><i class="ti ti-player-play" aria-hidden="true"></i> Iniciar</button>
+        </div>
+      </div>
+
+      <!-- Modal de confirmação de cancelamento — invariante #3 do claude.md -->
+      <div class="modal-overlay" id="cancel-modal">
+        <div class="modal-box">
+          <div class="modal-title">Cancelar sessão?</div>
+          <div class="modal-msg">A sessão atual será descartada. O tempo decorrido não será registrado como completo.</div>
+          <div class="modal-btns">
+            <button class="tbtn tbtn-ghost" onclick="document.getElementById('cancel-modal').classList.remove('on')">Voltar</button>
+            <button class="tbtn tbtn-danger" onclick="document.getElementById('cancel-modal').classList.remove('on')">Cancelar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- REVIEW TAB -->
+    <div class="screen" id="s-review">
+      <div class="section-label">Histórico de sessões</div>
+      <div style="display:flex;gap:6px;margin-bottom:12px;">
+        <button class="ftag sel" style="font-size:10px;">Tudo</button>
+        <button class="ftag" style="font-size:10px;">Estudo</button>
+        <button class="ftag" style="font-size:10px;">Research</button>
+        <button class="ftag" style="font-size:10px;">Saúde</button>
+      </div>
+
+      <div class="review-item">
+        <div class="ri-icon" style="background:#1a2633;"><i class="ti ti-clock" style="color:#4a90d9;font-size:15px;" aria-hidden="true"></i></div>
+        <div class="ri-info">
+          <div class="ri-title">Anki · Fisiologia</div>
+          <div class="ri-meta">Hoje · 08:30 · Estudo</div>
+        </div>
+        <div class="ri-dur">45 min</div>
+      </div>
+      <div class="review-item">
+        <div class="ri-icon" style="background:#2a1e33;"><i class="ti ti-clock" style="color:#9b6fc7;font-size:15px;" aria-hidden="true"></i></div>
+        <div class="ri-info">
+          <div class="ri-title">Revisão TCLE</div>
+          <div class="ri-meta">Hoje · 07:00 · Research</div>
+        </div>
+        <div class="ri-dur">25 min</div>
+      </div>
+      <div class="review-item">
+        <div class="ri-icon" style="background:#1a2633;"><i class="ti ti-clock-off" style="color:#555;font-size:15px;" aria-hidden="true"></i></div>
+        <div class="ri-info">
+          <div class="ri-title">Cap. 11 Guyton</div>
+          <div class="ri-meta">Ontem · 22:10 · Estudo · <span style="color:#5c3a3a;">Cancelada</span></div>
+        </div>
+        <div class="ri-dur" style="color:#444;">18 min</div>
+      </div>
+      <div class="review-item">
+        <div class="ri-icon" style="background:#1a2a1e;"><i class="ti ti-clock" style="color:#4caf72;font-size:15px;" aria-hidden="true"></i></div>
+        <div class="ri-info">
+          <div class="ri-title">Treino força</div>
+          <div class="ri-meta">Ontem · 07:00 · Saúde</div>
+        </div>
+        <div class="ri-dur">60 min</div>
+      </div>
+      <div class="review-item">
+        <div class="ri-icon" style="background:#1a1a1a;"><i class="ti ti-clock" style="color:#555;font-size:15px;" aria-hidden="true"></i></div>
+        <div class="ri-info">
+          <!-- Tag órfã (excluída): renderiza com cor neutra #555 -->
+          <div class="ri-title">Leitura solta</div>
+          <div class="ri-meta">11 mai · 19:30 · <span class="task-tag tag-none">Sem tag</span></div>
+        </div>
+        <div class="ri-dur">30 min</div>
+      </div>
+    </div>
+
+    <!-- DASHBOARD TAB -->
+    <div class="screen" id="s-dash">
+      <div class="dash-sub">
+        <button class="ds-btn on" onclick="switchDash(this,'d-overview')">Overview</button>
+        <button class="ds-btn" onclick="switchDash(this,'d-day')">Dia</button>
+        <button class="ds-btn" onclick="switchDash(this,'d-week')">Semana</button>
+        <button class="ds-btn" onclick="switchDash(this,'d-year')">Ano</button>
+      </div>
+
+      <div id="d-overview">
+        <div class="stat-grid">
+          <div class="stat-card">
+            <div class="stat-val"><span class="stat-accent">48</span>h</div>
+            <div class="stat-lbl">Foco total</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-val"><span class="stat-accent">142</span></div>
+            <div class="stat-lbl">Sessões</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-val"><span class="stat-accent">89</span></div>
+            <div class="stat-lbl">Tarefas feitas</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-val"><span class="stat-accent">21</span>d</div>
+            <div class="stat-lbl">Ativo</div>
+          </div>
+        </div>
+        <div class="section-label">Tag mais praticada</div>
+        <div style="display:flex;gap:6px;margin-bottom:10px;">
+          <div style="flex:1;background:#161616;border-radius:8px;padding:8px;border:0.5px solid #222;">
+            <div style="font-size:10px;color:#555;margin-bottom:3px;">Estudo</div>
+            <div style="height:4px;background:#1a1a1a;border-radius:2px;"><div style="height:4px;width:65%;background:#4a90d9;border-radius:2px;"></div></div>
+          </div>
+          <div style="flex:1;background:#161616;border-radius:8px;padding:8px;border:0.5px solid #222;">
+            <div style="font-size:10px;color:#555;margin-bottom:3px;">Research</div>
+            <div style="height:4px;background:#1a1a1a;border-radius:2px;"><div style="height:4px;width:25%;background:#9b6fc7;border-radius:2px;"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="d-day" style="display:none;">
+        <div class="section-label">Foco por hora · hoje</div>
+        <div style="display:flex;gap:2px;align-items:flex-end;height:60px;margin-bottom:8px;">
+          <div style="flex:1;background:#1a1a1a;height:10%;border-radius:2px 2px 0 0;"></div>
+          <div style="flex:1;background:#1a1a1a;height:5%;border-radius:2px 2px 0 0;"></div>
+          <div style="flex:1;background:#c9a84c;height:90%;border-radius:2px 2px 0 0;opacity:0.7;"></div>
+          <div style="flex:1;background:#c9a84c;height:100%;border-radius:2px 2px 0 0;"></div>
+          <div style="flex:1;background:#1a1a1a;height:0%;border-radius:2px 2px 0 0;"></div>
+          <div style="flex:1;background:#c9a84c;height:50%;border-radius:2px 2px 0 0;opacity:0.6;"></div>
+          <div style="flex:1;background:#1a1a1a;height:0%;border-radius:2px 2px 0 0;"></div>
+          <div style="flex:1;background:#1a1a1a;height:0%;border-radius:2px 2px 0 0;"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:9px;color:#333;margin-bottom:12px;">
+          <span>6h</span><span>9h</span><span>12h</span><span>15h</span><span>18h</span><span>21h</span>
+        </div>
+        <div class="stat-grid">
+          <div class="stat-card"><div class="stat-val"><span class="stat-accent">1h</span>58</div><div class="stat-lbl">Foco hoje</div></div>
+          <div class="stat-card"><div class="stat-val"><span class="stat-accent">3</span></div><div class="stat-lbl">Sessões</div></div>
+        </div>
+      </div>
+
+      <div id="d-week" style="display:none;">
+        <div class="section-label">Foco diário · últimos 7 dias</div>
+        <div class="bar-chart">
+          <div class="bar-col"><div class="bar" style="height:30%;"></div><div class="bar-lbl">S</div></div>
+          <div class="bar-col"><div class="bar" style="height:70%;"></div><div class="bar-lbl">T</div></div>
+          <div class="bar-col"><div class="bar" style="height:50%;"></div><div class="bar-lbl">Q</div></div>
+          <div class="bar-col"><div class="bar" style="height:90%;"></div><div class="bar-lbl">Q</div></div>
+          <div class="bar-col"><div class="bar" style="height:40%;"></div><div class="bar-lbl">S</div></div>
+          <div class="bar-col"><div class="bar" style="height:20%;"></div><div class="bar-lbl">S</div></div>
+          <div class="bar-col active"><div class="bar active" style="height:55%;"></div><div class="bar-lbl" style="color:#c9a84c;">H</div></div>
+        </div>
+        <div class="stat-grid">
+          <div class="stat-card"><div class="stat-val"><span class="stat-accent">11h</span>20</div><div class="stat-lbl">Total semana</div></div>
+          <div class="stat-card"><div class="stat-val"><span class="stat-accent">1h</span>37</div><div class="stat-lbl">Média/dia</div></div>
+        </div>
+      </div>
+
+      <div id="d-year" style="display:none;">
+        <div class="section-label">Dias ativos · 2026 (amostra — app real: ~52×7 com scroll)</div>
+        <div class="heatmap-row">
+          <div class="hm-cell hm-2"></div><div class="hm-cell hm-1"></div><div class="hm-cell"></div><div class="hm-cell hm-3"></div><div class="hm-cell hm-2"></div><div class="hm-cell hm-1"></div><div class="hm-cell hm-4"></div>
+          <div class="hm-cell hm-2"></div><div class="hm-cell hm-3"></div><div class="hm-cell hm-1"></div><div class="hm-cell hm-4"></div><div class="hm-cell hm-2"></div><div class="hm-cell"></div><div class="hm-cell hm-1"></div>
+          <div class="hm-cell hm-3"></div><div class="hm-cell hm-2"></div><div class="hm-cell hm-4"></div><div class="hm-cell hm-1"></div><div class="hm-cell hm-2"></div><div class="hm-cell hm-3"></div><div class="hm-cell hm-4"></div>
+          <div class="hm-cell hm-1"></div><div class="hm-cell hm-2"></div><div class="hm-cell hm-3"></div><div class="hm-cell"></div><div class="hm-cell hm-4"></div><div class="hm-cell hm-2"></div><div class="hm-cell hm-3"></div>
+        </div>
+        <div style="display:flex;gap:4px;align-items:center;margin-bottom:12px;">
+          <span style="font-size:9px;color:#333;">Menos</span>
+          <div class="hm-cell" style="width:12px;height:12px;"></div>
+          <div class="hm-cell hm-1" style="width:12px;height:12px;"></div>
+          <div class="hm-cell hm-2" style="width:12px;height:12px;"></div>
+          <div class="hm-cell hm-3" style="width:12px;height:12px;"></div>
+          <div class="hm-cell hm-4" style="width:12px;height:12px;"></div>
+          <span style="font-size:9px;color:#333;">Mais</span>
+        </div>
+        <div class="stat-grid">
+          <div class="stat-card"><div class="stat-val"><span class="stat-accent">21</span></div><div class="stat-lbl">Dias ativos</div></div>
+          <div class="stat-card"><div class="stat-val"><span class="stat-accent">79%</span></div><div class="stat-lbl">Consistência</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- NAV BAR -->
+    <div class="navbar">
+      <div class="nav-item active" onclick="switchTab('todo',this)" id="nav-todo">
+        <i class="ti ti-check" aria-label="To-do"></i>
+        <span class="nav-lbl">To-do</span>
+      </div>
+      <div class="nav-item" onclick="switchTab('focus',this)" id="nav-focus">
+        <i class="ti ti-hourglass" aria-label="Focus"></i>
+        <span class="nav-lbl">Focus</span>
+      </div>
+      <div class="nav-item" onclick="switchTab('review',this)" id="nav-review">
+        <i class="ti ti-history" aria-label="Review"></i>
+        <span class="nav-lbl">Review</span>
+      </div>
+      <div class="nav-item" onclick="switchTab('dash',this)" id="nav-dash">
+        <i class="ti ti-chart-bar" aria-label="Dashboard"></i>
+        <span class="nav-lbl">Dashboard</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function switchTab(name, el) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('s-' + name).classList.add('active');
+  el.classList.add('active');
+}
+
+function switchView(btn, viewId) {
+  document.querySelectorAll('.view-toggle .vt-btn').forEach(b => b.classList.remove('on'));
+  btn.classList.add('on');
+  ['v-list','v-kanban','v-cal'].forEach(id => {
+    var el = document.getElementById(id);
+    if (el) el.style.display = (id === viewId) ? 'block' : 'none';
+  });
+}
+
+function switchMode(btn, modeId) {
+  document.querySelectorAll('.mode-row .mode-btn').forEach(b => b.classList.remove('on'));
+  btn.classList.add('on');
+  ['m-timer','m-stopwatch'].forEach(id => {
+    var el = document.getElementById(id);
+    if (el) el.style.display = (id === modeId) ? 'block' : 'none';
+  });
+}
+
+function switchDash(btn, dashId) {
+  document.querySelectorAll('.dash-sub .ds-btn').forEach(b => b.classList.remove('on'));
+  btn.classList.add('on');
+  ['d-overview','d-day','d-week','d-year'].forEach(id => {
+    var el = document.getElementById(id);
+    if (el) el.style.display = (id === dashId) ? 'block' : 'none';
+  });
+}
+
+function selTag(btn) {
+  btn.closest('.focus-tag-row').querySelectorAll('.ftag').forEach(b => b.classList.remove('sel'));
+  btn.classList.add('sel');
+}
+</script>
