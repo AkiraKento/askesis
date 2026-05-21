@@ -1,0 +1,28 @@
+# BLAST methodology: .tmp/ is ephemeral workbench
+.tmp/
+
+# Flutter (will be relevant once `flutter create` runs)
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+.idea/
+.vscode/
+*.iml
+*.lock
+
+# Sensitive — must never be committed
+.env
+android/app/google-services.json
+android/key.properties
+*.jks
+*.keystore
+
+# OS
+.DS_Store
+Thumbs.db
