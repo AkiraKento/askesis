@@ -369,6 +369,127 @@ askesis/
 
 ---
 
+## 🔄 v2 — Evolução (cloud sync + screen time + sempre-ativo)
+
+> Os schemas e invariantes abaixo são **adições/alterações** da v2.
+> Plano de execução completo em `v2_plan.md`.
+
+### v2.1 Schemas alterados
+
+#### `Tag` — campo novo
+- `is_app_category: bool` (default `false`) — `true` se a tag categoriza
+  apps (não é exclusivo com uso manual).
+
+#### `FocusSession` — campos novos
+- `source: Enum { manual, app_usage }` (default `manual`).
+- `source_app_package: String?` — pacote Android quando
+  `source == app_usage`.
+- `synced_at: DateTime?` — null = ainda não sincronizado.
+- `deleted_at: DateTime?` — soft delete (propaga via sync).
+
+#### `Task` — campos novos
+- `synced_at: DateTime?`
+- `deleted_at: DateTime?`
+
+### v2.2 Entidades novas
+
+#### `TimerPreset`
+```json
+{
+  "id": "String (UUID)",
+  "label": "String",
+  "duration_seconds": "int",
+  "is_default": "bool",
+  "sort_order": "int"
+}
+```
+Seed: 15, 25, 50, 90 min (`is_default=true`).
+
+#### `AppPackage`
+```json
+{
+  "package_name": "String (PK)",
+  "display_name": "String",
+  "icon_bytes": "Uint8List?",
+  "tag_id": "String?",
+  "ignored": "bool",
+  "first_seen_at": "DateTime",
+  "last_seen_at": "DateTime"
+}
+```
+
+#### `AppUsageSession`
+```json
+{
+  "id": "String (UUID)",
+  "package_name": "String",
+  "started_at": "DateTime",
+  "ended_at": "DateTime",
+  "duration_seconds": "int",
+  "tag_id": "String?",
+  "promoted_to_focus_session_id": "String?",
+  "synced_at": "DateTime?"
+}
+```
+**Threshold:** `duration_seconds >= 180` (3 min) — sessões mais curtas são
+descartadas na captura.
+
+#### `UserAccount`
+```json
+{
+  "uid": "String (Firebase UID)",
+  "email": "String?",
+  "display_name": "String?",
+  "device_id": "String",
+  "last_sync_at": "DateTime?",
+  "sync_enabled": "bool"
+}
+```
+
+#### `SyncCursor`
+```json
+{
+  "collection": "String",
+  "last_pulled_at": "DateTime",
+  "last_pushed_at": "DateTime"
+}
+```
+
+### v2.3 Invariantes adicionais
+
+10. **App usage threshold:** sessões `AppUsageSession` com
+    `duration_seconds < 180` são descartadas antes da persistência.
+11. **Soft delete obrigatório** para Task, FocusSession, Tag, TimerPreset,
+    AppPackage. Sem `DELETE` físico antes do push confirmado.
+12. **Sync = last-write-wins por campo** via server timestamp; soft delete
+    sempre vence update.
+13. **Tags têm dupla natureza:** manuais (uso consciente) e/ou
+    `is_app_category=true` (categoriza apps). Não são exclusivas.
+14. **Permissões opt-in:** `PACKAGE_USAGE_STATS` e `SYSTEM_ALERT_WINDOW`
+    são features avançadas — o app funciona 100% sem elas. Sempre exibir
+    rationale antes do prompt do sistema.
+15. **Sync é opt-in:** sem login → comportamento v1 (100% local). Logout
+    NÃO apaga dados locais — apenas reseta `SyncCursor`.
+
+### v2.4 Stack adicional
+
+| Camada | Tecnologia |
+|---|---|
+| Auth | `firebase_auth` + `google_sign_in` |
+| Cloud DB | `cloud_firestore` (cache offline nativo) |
+| Background | `workmanager` (pull de UsageStats a cada 15 min) |
+| Widget | `home_widget` (Flutter) + RemoteViews (Kotlin) |
+| Native bridge | `MethodChannel` em Kotlin (UsageStats, Overlay) |
+
+### v2.5 Permissões Android adicionais
+
+`PACKAGE_USAGE_STATS`, `SYSTEM_ALERT_WINDOW`, `FOREGROUND_SERVICE`,
+`FOREGROUND_SERVICE_SPECIAL_USE`, `POST_NOTIFICATIONS`, `INTERNET`,
+`QUERY_ALL_PACKAGES`.
+
+---
+
 *Última atualização: Phase 1 — Blueprint concluído + lacunas de auditoria
-fechadas. Schema confirmado. Phase 2 (Link) dispensada. Phase 3 (Architect)
-liberada.*
+fechadas + roadmap v2 incorporado (schemas, invariantes 10–15, stack
+adicional). Schema confirmado. Phase 2 (Link) dispensada na v1;
+reintroduzida na v2 (Firebase). Phase 3 (Architect) liberada.*
